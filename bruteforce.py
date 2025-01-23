@@ -4,13 +4,13 @@ from itertools import combinations
 # Fonction pour charger les données du fichier CSV
 def charger_donnees(fichier):
     actions = []
-    with open(fichier, 'r') as file:
+    with open(fichier, 'r', encoding='utf-8') as file:
         reader = csv.DictReader(file)
+        print(f"Colonnes détectées : {reader.fieldnames}")  # Débogage
         for row in reader:
-            nom = row['Actions']
-            cout = float(row['Coût par action (en euros)'])
-            benefice_pourcent = float(row['Bénéfice (après 2 ans)'])
-            # Calculer le bénéfice en euros
+            nom = row['Actions #'].strip()  # Nettoie les espaces
+            cout = float(row['Coût par action (en euros)'].strip())
+            benefice_pourcent = float(row['Bénéfice (après 2 ans)'].strip().replace('%', ''))  # Retire le '%'
             benefice = cout * (benefice_pourcent / 100)
             actions.append((nom, cout, benefice))
     return actions
@@ -53,3 +53,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
