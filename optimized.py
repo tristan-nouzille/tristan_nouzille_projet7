@@ -70,7 +70,7 @@ def optimiser_investissement(actions, budget_max):
 
 # Fonction principale
 def main():
-    fichier_actions = "test.csv"  
+    fichier_actions = "Liste+d'actions+-+P7+Python+-+Feuille+1.csv"  
     budget_max = 500  
 
     debut = time.time()

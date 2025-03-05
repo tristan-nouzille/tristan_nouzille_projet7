@@ -73,7 +73,7 @@ def trouver_meilleure_combinaison(actions, budget_max):
 
 # Fonction principale
 def main():
-    fichier_actions = "test.csv"  # Remplacer par le fichier réel
+    fichier_actions = "Liste+d'actions+-+P7+Python+-+Feuille+1.csv"  # Remplacer par le fichier réel
     budget_max = 500  # Budget maximum (peut être rendu dynamique)
 
     # Mesurer le temps de début
