@@ -68,7 +68,7 @@ Début
   # - budget_max : budget disponible
 
   n ← nombre d'actions
-  Créer un tableau dp de taille (n+1) × (budget_max+1) initialisé à 0
+  dp <- tableau de taille (n+1) × (budget_max+1) initialisé à 0
 
   # Remplissage du tableau dp
   Pour i allant de 1 à n :
