@@ -1,54 +1,44 @@
 import csv
 import time
+import os
 import colorama
 from colorama import Fore, Style
 
-colorama.init()
+colorama.init(autoreset=True)
 
-# Charger les données du fichier CSV
+# Charger les données depuis un fichier CSV
 def charger_donnees(fichier):
     actions = []
     try:
         with open(fichier, 'r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
-            if not {'Actions #', 'Coût par action (en euros)', 'Bénéfice (après 2 ans)'} <= set(reader.fieldnames):
+            if not {'name', 'price', 'profit'} <= set(reader.fieldnames):
                 raise ValueError("Format incorrect du fichier CSV.")
 
             for row in reader:
                 try:
-                    nom = row['Actions #'].strip()
-                    cout = float(row['Coût par action (en euros)'].strip())
+                    nom = row['name'].strip()
+                    cout = float(row['price'].strip())
+                    benefice = float(row['profit'].strip())
 
-                    benefice_pourcent = row['Bénéfice (après 2 ans)'].strip()
-                    if benefice_pourcent.endswith('%'):
-                        benefice_pourcent = float(benefice_pourcent.replace('%', ''))
-                    else:
-                        benefice_pourcent = float(benefice_pourcent)
-
-                    benefice = cout * (benefice_pourcent / 100)
-
-                    if cout > 0 and benefice > 0:  # Ne garder que les actions rentables
+                    if cout > 0 and benefice > 0:
                         actions.append((nom, cout, benefice))
                 except ValueError:
-                    print(f"{Fore.RED}Erreur dans le format des données pour l'action {row['Actions #']}{Style.RESET_ALL}")
-
+                    print(f"{Fore.RED}Erreur dans le format des données pour l'action : {row.get('name', 'inconnue')}")
     except FileNotFoundError:
-        print(f"{Fore.RED}Erreur : Fichier {fichier} introuvable !{Style.RESET_ALL}")
+        print(f"{Fore.RED}Fichier introuvable : {fichier}")
     except Exception as e:
-        print(f"{Fore.RED}Erreur : {e}{Style.RESET_ALL}")
-
+        print(f"{Fore.RED}Erreur lors du chargement de {fichier} : {e}")
     return actions
 
-# Algorithme du sac à dos (Optimisation dynamique)
+# Algorithme d'optimisation (sac à dos)
 def optimiser_investissement(actions, budget_max):
     n = len(actions)
-    budget_max = int(budget_max * 100)  # Conversion pour éviter les erreurs de float
+    budget_max = int(budget_max * 100)
     actions = [(nom, int(cout * 100), benefice) for nom, cout, benefice in actions]
 
-    # Table de programmation dynamique
     dp = [[0] * (budget_max + 1) for _ in range(n + 1)]
 
-    # Remplissage du tableau
     for i in range(1, n + 1):
         nom, cout, benefice = actions[i - 1]
         for b in range(budget_max + 1):
@@ -57,45 +47,51 @@ def optimiser_investissement(actions, budget_max):
             else:
                 dp[i][b] = max(dp[i - 1][b], dp[i - 1][b - cout] + benefice)
 
-    # Reconstruction de la meilleure sélection
     b = budget_max
     meilleure_combinaison = []
     for i in range(n, 0, -1):
-        if dp[i][b] != dp[i - 1][b]:  # L'action a été sélectionnée
+        if dp[i][b] != dp[i - 1][b]:
             nom, cout, benefice = actions[i - 1]
             meilleure_combinaison.append((nom, cout / 100, benefice))
             b -= cout
 
-    return meilleure_combinaison, dp[n][budget_max]
+    return meilleure_combinaison[::-1], dp[n][budget_max]
+
+# Analyse d’un fichier CSV donné
+def analyser_fichier(fichier, budget_max=500):
+    print(f"\n📊 {Style.BRIGHT}Analyse du fichier : {Fore.CYAN}{fichier}{Style.RESET_ALL}")
+    print("------------------------------------------------------------")
+
+    debut = time.time()
+    actions = charger_donnees(fichier)
+
+    if not actions:
+        print(f"{Fore.RED}Aucune action valide trouvée. Fichier ignoré.")
+        return
+
+    combinaison, profit_total = optimiser_investissement(actions, budget_max)
+    cout_total = sum(a[1] for a in combinaison)
+    duree = time.time() - debut
+
+    print(f"\n✅ {Style.BRIGHT}Meilleure sélection d'actions :")
+    for nom, cout, benefice in combinaison:
+        print(f"- {nom} (Coût : {Fore.BLUE}{cout:.2f} €{Style.RESET_ALL}, "
+              f"Bénéfice : {Fore.GREEN}{benefice:.2f} €{Style.RESET_ALL})")
+
+    print(f"\n💰 Coût total : {Fore.RED}{cout_total:.2f} €")
+    print(f"📈 Bénéfice total : {Fore.GREEN}{profit_total:.2f} €")
+    print(f"⏳ Temps de calcul : {duree:.4f} secondes")
+    print("------------------------------------------------------------")
 
 # Fonction principale
 def main():
-    fichier_actions = "Liste+d'actions+-+P7+Python+-+Feuille+1.csv"  
-    budget_max = 500  
+    dossier = "./datasets"
+    fichiers = ["dataset1_Python+P7.csv", "dataset2_Python+P7.csv"]
 
-    debut = time.time()
-
-    actions = charger_donnees(fichier_actions)
-
-    if not actions:
-        print(f"{Fore.RED}Aucune action valide trouvée. Vérifiez le fichier.{Style.RESET_ALL}")
-        return
-
-    meilleure_combinaison, meilleur_benefice = optimiser_investissement(actions, budget_max)
-
-    fin = time.time()
-    temps_execution = fin - debut
-
-    # Affichage des résultats
-    print("\n📈 Meilleure sélection d'actions à acheter :")
-    for action in meilleure_combinaison:
-        print(f"- {action[0]} (Coût : {Fore.BLUE}{action[1]:.2f} €{Style.RESET_ALL}, "
-              f"Bénéfice : {Fore.GREEN}{action[2]:.2f} €{Style.RESET_ALL})")
-    
-    cout_total = sum(action[1] for action in meilleure_combinaison)
-    print(f"\n💰 Coût total : {Fore.RED}{cout_total:.2f} €{Style.RESET_ALL}")
-    print(f"📊 Bénéfice total : {Fore.GREEN}{meilleur_benefice:.2f} €{Style.RESET_ALL}")
-    print(f"\n⏳ Temps d'exécution : {temps_execution:.4f} secondes")
+    for fichier in fichiers:
+        chemin_complet = os.path.join(dossier, fichier)
+        analyser_fichier(chemin_complet)
 
 if __name__ == "__main__":
     main()
+

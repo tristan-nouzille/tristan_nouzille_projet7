@@ -1,111 +1,118 @@
 import csv
+import os
 import time
-import colorama
-from colorama import Fore, Style
+import pandas as pd
+from colorama import init, Fore, Style
 
-# Initialisation colorama (nécessaire sous Windows)
-colorama.init()
+init(autoreset=True)
 
-# Fonction pour charger les données du fichier CSV avec gestion des erreurs
-def charger_donnees(fichier):
-    actions = []
-    try:
-        with open(fichier, 'r', encoding='utf-8') as file:
-            reader = csv.DictReader(file)
-            if not {'Actions #', 'Coût par action (en euros)', 'Bénéfice (après 2 ans)'} <= set(reader.fieldnames):
-                raise ValueError("Format incorrect du fichier CSV.")
+def charger_donnees(nom_fichier):
+    donnees = []
+    with open(nom_fichier, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        colonnes_possibles = [
+            {'Actions #', 'Coût par action (en euros)', 'Bénéfice (après 2 ans)'},
+            {'name', 'price', 'profit'}
+        ]
 
-            for row in reader:
-                try:
-                    nom = row['Actions #'].strip()
-                    cout = float(row['Coût par action (en euros)'].strip())
+        if not any(possibles <= set(reader.fieldnames) for possibles in colonnes_possibles):
+            raise ValueError(f"Format incorrect du fichier CSV. Colonnes trouvées : {reader.fieldnames}")
 
-                    # Vérification et conversion du bénéfice
-                    benefice_pourcent = row['Bénéfice (après 2 ans)'].strip()
-                    if benefice_pourcent.endswith('%'):
-                        benefice_pourcent = float(benefice_pourcent.replace('%', ''))
-                    else:
-                        benefice_pourcent = float(benefice_pourcent)  # Cas où le `%` est absent
+        if {'name', 'price', 'profit'} <= set(reader.fieldnames):
+            col_nom = 'name'
+            col_cout = 'price'
+            col_benefice = 'profit'
+        else:
+            col_nom = 'Actions #'
+            col_cout = 'Coût par action (en euros)'
+            col_benefice = 'Bénéfice (après 2 ans)'
 
-                    benefice = cout * (benefice_pourcent / 100)
+        for row in reader:
+            try:
+                nom = row[col_nom].strip()
+                cout = float(row[col_cout].strip())
+                benefice_val = row[col_benefice].strip()
+                benefice = float(benefice_val.replace('%', '')) * cout / 100 if '%' in benefice_val else float(benefice_val)
+                if cout > 0 and benefice > 0:
+                    donnees.append((nom, cout, benefice))
+            except (ValueError, KeyError):
+                continue
+    return donnees
 
-                    if cout > 0 and benefice > 0:
-                        actions.append((nom, cout, benefice))
-                except ValueError:
-                    print(f"{Fore.RED}Erreur dans le format des données pour l'action {row['Actions #']}{Style.RESET_ALL}")
+def bruteforce(actions, budget):
+    n = len(actions)
+    meilleur_combinaison = []
+    meilleur_benefice = 0.0
+    meilleur_cout = 0.0
 
-    except FileNotFoundError:
-        print(f"{Fore.RED}Erreur : Fichier {fichier} introuvable !{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"{Fore.RED}Erreur : {e}{Style.RESET_ALL}")
-
-    return actions
-
-# Génération des combinaisons (Brute Force)
-def generer_combinaisons(actions, index=0, combinaison_actuelle=None):
-    if combinaison_actuelle is None:
-        combinaison_actuelle = []
-    
-    if index == len(actions):
-        yield combinaison_actuelle
-        return
-    
-    # Inclure l'action actuelle dans la combinaison
-    yield from generer_combinaisons(actions, index + 1, combinaison_actuelle + [actions[index]])
-    
-    # Ne pas inclure l'action actuelle dans la combinaison
-    yield from generer_combinaisons(actions, index + 1, combinaison_actuelle)
-
-# Trouver la meilleure combinaison d'actions
-def trouver_meilleure_combinaison(actions, budget_max):
-    meilleure_combinaison = []
-    meilleur_benefice = 0
-
-    for combinaison in generer_combinaisons(actions):
-        cout_total = sum(action[1] for action in combinaison)
-        benefice_total = sum(action[2] for action in combinaison)
-
-        if cout_total <= budget_max and benefice_total > meilleur_benefice:
-            meilleure_combinaison = combinaison
+    for i in range(1, 2 ** n):
+        combinaison = []
+        cout_total = 0.0
+        benefice_total = 0.0
+        for j in range(n):
+            if (i >> j) & 1:
+                action = actions[j]
+                cout_total += action[1]
+                benefice_total += action[2]
+                combinaison.append(action)
+        if cout_total <= budget and benefice_total > meilleur_benefice:
+            meilleur_combinaison = combinaison
             meilleur_benefice = benefice_total
+            meilleur_cout = cout_total
+    return meilleur_combinaison, meilleur_cout, meilleur_benefice
 
-    return meilleure_combinaison, meilleur_benefice
+def explorer_csv(fichier):
+    try:
+        df = pd.read_csv(fichier)
+        print(f"{Fore.CYAN}📊 Analyse exploratoire du fichier : {fichier}{Style.RESET_ALL}")
+        print(Fore.YELLOW + "-" * 60 + Style.RESET_ALL)
+        print(f"{Fore.MAGENTA}Nombre total de lignes : {len(df)}{Style.RESET_ALL}")
+        print(f"{Fore.MAGENTA}Colonnes : {list(df.columns)}{Style.RESET_ALL}\n")
+        print(f"{Fore.CYAN}Résumé statistique :{Style.RESET_ALL}")
+        print(Fore.GREEN + df.describe().to_string() + Style.RESET_ALL)
+        print(f"\n{Fore.CYAN}Valeurs manquantes :{Style.RESET_ALL}")
+        print(Fore.RED + df.isnull().sum().to_string() + Style.RESET_ALL)
+        print(Fore.YELLOW + "-" * 60 + Style.RESET_ALL)
+    except Exception as e:
+        print(f"{Fore.RED}Erreur lors de l'analyse exploratoire : {e}{Style.RESET_ALL}")
 
-# Fonction principale
 def main():
-    fichier_actions = "Liste+d'actions+-+P7+Python+-+Feuille+1.csv"  # Remplacer par le fichier réel
-    budget_max = 500  # Budget maximum (peut être rendu dynamique)
+    dossier_datasets = "./datasets"
+    fichiers_csv = [f for f in os.listdir(dossier_datasets) if f.endswith('.csv')]
+    budget = 500
 
-    # Mesurer le temps de début
-    debut = time.time()
+    for fichier in fichiers_csv:
+        chemin_fichier = os.path.join(dossier_datasets, fichier)
+        explorer_csv(chemin_fichier)
 
-    # Charger les données
-    actions = charger_donnees(fichier_actions)
+        try:
+            actions = charger_donnees(chemin_fichier)
+        except ValueError as e:
+            print(f"{Fore.RED}Erreur : {e}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}Aucune action valide pour {fichier}.{Style.RESET_ALL}\n")
+            continue
 
-    if not actions:
-        print(f"{Fore.RED}Aucune action valide trouvée. Vérifiez le fichier.{Style.RESET_ALL}")
-        return
+        if not actions:
+            print(f"{Fore.YELLOW}Aucune action valide pour {fichier}.{Style.RESET_ALL}\n")
+            continue
 
-    # Trouver la meilleure combinaison
-    meilleure_combinaison, meilleur_benefice = trouver_meilleure_combinaison(actions, budget_max)
+        print(f"\n{Fore.BLUE}🔍 Lancement du bruteforce pour : {fichier}{Style.RESET_ALL}")
+        debut = time.time()
+        resultats, cout_total, benefice_total = bruteforce(actions, budget)
+        fin = time.time()
 
-    # Mesurer le temps de fin
-    fin = time.time()
-    temps_execution = fin - debut
+        print(f"\n{Fore.GREEN}✅ Meilleure combinaison trouvée :{Style.RESET_ALL}")
+        for nom, cout, benefice in resultats:
+            print(f"{nom} - Coût: {cout:.2f}€, Bénéfice: {benefice:.2f}€")
 
-    # Afficher les résultats avec les couleurs :
-    print("\n📈 Meilleure sélection d'actions à acheter :")
-    for action in meilleure_combinaison:
-        print(f"- {action[0]} (Coût : {Fore.BLUE}{action[1]:.2f} €{Style.RESET_ALL}, "
-              f"Bénéfice : {Fore.GREEN}{action[2]:.2f} €{Style.RESET_ALL})")
-    
-    cout_total = sum(action[1] for action in meilleure_combinaison)
-    print(f"\n💰 Coût total : {Fore.RED}{cout_total:.2f} €{Style.RESET_ALL}")
-    print(f"📊 Bénéfice total : {Fore.GREEN}{meilleur_benefice:.2f} €{Style.RESET_ALL}")
-    print(f"\n⏳ Temps d'exécution : {temps_execution:.4f} secondes")
+        print(f"\n{Fore.GREEN}💰 Coût total : {cout_total:.2f}€{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}📈 Bénéfice total : {benefice_total:.2f}€{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}⏱ Temps d'exécution : {fin - debut:.2f} secondes{Style.RESET_ALL}")
+        print(Fore.YELLOW + "=" * 60 + Style.RESET_ALL)
 
 if __name__ == "__main__":
     main()
+
 
 
 
